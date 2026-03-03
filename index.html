@@ -799,8 +799,7 @@
             useEffect(() => {
                 localStorage.setItem('baby_logs', JSON.stringify(logs));
                 localStorage.setItem('baby_daily_comments', JSON.stringify(dailyComments));
-                lucide.createIcons();
-            }, [logs, dailyComments, activeTab, isModalOpen]);
+            }, [logs, dailyComments]);
 
             // 3. Supabase 同期設定
             useEffect(() => {
@@ -1101,11 +1100,12 @@
                     <div className="home-view animate-up">
                         <div style={{ margin: '0 20px 20px' }}>
                             <textarea
+                                key={`memo-${getLocalDateString()}`}
                                 className="glass-pane"
                                 style={{ width: '100%', border: 'none', padding: '15px', borderRadius: '20px', fontSize: '14px', minHeight: '80px', resize: 'none' }}
                                 placeholder="今日の予定やメモ..."
-                                value={dailyComments[getLocalDateString()] || ''}
-                                onChange={(e) => updateDailyComment(e.target.value)}
+                                defaultValue={dailyComments[getLocalDateString()] || ''}
+                                onBlur={(e) => updateDailyComment(e.target.value)}
                             ></textarea>
                         </div>
 
@@ -1412,17 +1412,17 @@
 
                         <div className="input-group">
                             <label>Sync ID (夫婦共通の合言葉)</label>
-                            <input type="text" value={syncId} onChange={e => setSyncId(e.target.value)} placeholder="例: tanaka-baby-2026" />
+                            <input type="text" defaultValue={syncId} onBlur={e => setSyncId(e.target.value)} placeholder="例: tanaka-baby-2026" />
                         </div>
 
                         <div className="input-group">
                             <label>Supabase URL</label>
-                            <input type="text" value={supabaseUrl} onChange={e => setSupabaseUrl(e.target.value)} placeholder="https://xxx.supabase.co" />
+                            <input type="text" defaultValue={supabaseUrl} onBlur={e => setSupabaseUrl(e.target.value)} placeholder="https://xxx.supabase.co" />
                         </div>
 
                         <div className="input-group">
                             <label>Supabase Anon Key</label>
-                            <input type="password" value={supabaseKey} onChange={e => setSupabaseKey(e.target.value)} placeholder="eyJhbG..." />
+                            <input type="password" defaultValue={supabaseKey} onBlur={e => setSupabaseKey(e.target.value)} placeholder="eyJhbG..." />
                         </div>
 
                         <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(0,0,0,0.03)', borderRadius: '12px', fontSize: '12px', color: '#7f8c8d' }}>
