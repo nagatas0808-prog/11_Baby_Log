@@ -845,17 +845,32 @@
                     }
 
                     if (data && data.length > 0) {
-                        const cloudLogs = data.map(d => ({
-                            ...d.data,
-                            id: d.id,
-                            startTime: new Date(d.starttime),
-                            endTime: d.endtime ? new Date(d.endtime) : null
-                        }));
+                        const cloudLogs = [];
+                        const cloudComments = { ...dailyComments };
+
+                        data.forEach(d => {
+                            if (d.type === 'memo') {
+                                // メモデータの復元
+                                const dateStr = getLocalDateString(new Date(d.starttime));
+                                cloudComments[dateStr] = d.data.note;
+                            } else {
+                                cloudLogs.push({
+                                    ...d.data,
+                                    id: d.id,
+                                    startTime: new Date(d.starttime),
+                                    endTime: d.endtime ? new Date(d.endtime) : null
+                                });
+                            }
+                        });
                         setLogs(cloudLogs);
-                    } else if (logs.length > 0) {
+                        setDailyComments(cloudComments);
+                    } else if (logs.length > 0 || Object.keys(dailyComments).length > 0) {
                         // クラウドが空でローカルにデータがある場合、全件アップロード（初期移行）
                         for (const log of logs) {
                             await syncToCloud('upsert', log);
+                        }
+                        for (const [dateStr, note] of Object.entries(dailyComments)) {
+                            if (note) await syncCommentToCloud(dateStr, note);
                         }
                     }
                     setSyncStatus('synced');
@@ -890,13 +905,24 @@
                     .order('starttime', { ascending: false });
 
                 if (data) {
-                    const cloudLogs = data.map(d => ({
-                        ...d.data,
-                        id: d.id,
-                        startTime: new Date(d.starttime),
-                        endTime: d.endtime ? new Date(d.endtime) : null
-                    }));
+                    const cloudLogs = [];
+                    const cloudComments = { ...dailyComments };
+
+                    data.forEach(d => {
+                        if (d.type === 'memo') {
+                            const dateStr = getLocalDateString(new Date(d.starttime));
+                            cloudComments[dateStr] = d.data.note;
+                        } else {
+                            cloudLogs.push({
+                                ...d.data,
+                                id: d.id,
+                                startTime: new Date(d.starttime),
+                                endTime: d.endtime ? new Date(d.endtime) : null
+                            });
+                        }
+                    });
                     setLogs(cloudLogs);
+                    setDailyComments(cloudComments);
                 }
             };
 
@@ -920,6 +946,24 @@
                         ...payload
                     });
                 }
+            };
+
+            const syncCommentToCloud = async (dateStr, note) => {
+                if (!isSyncEnabled || !supabase.current) return;
+                const sId = syncId.trim();
+                const [y, m, d] = dateStr.split('-');
+                const startTime = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 0, 0, 0);
+
+                const payload = {
+                    id: `memo-${dateStr}`,
+                    sync_id: sId,
+                    starttime: startTime.toISOString(),
+                    endtime: null,
+                    type: 'memo',
+                    data: { note: note }
+                };
+
+                await supabase.current.from('baby_logs').upsert(payload);
             };
 
             const getLogsForDate = (date) => {
@@ -1068,6 +1112,7 @@
             const updateDailyComment = (val) => {
                 const dStr = getLocalDateString();
                 setDailyComments({ ...dailyComments, [dStr]: val });
+                syncCommentToCloud(dStr, val);
             };
 
             const viewStatsForDate = (dateStr) => {
