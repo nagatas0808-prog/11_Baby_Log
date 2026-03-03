@@ -953,9 +953,12 @@
                 const sId = syncId.trim();
                 const [y, m, d] = dateStr.split('-');
                 const startTime = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 0, 0, 0);
+                // idは数値ベースにする（DBのbigint型との互換性のため）
+                // 日付を元にユニークな数値IDを生成
+                const memoId = `${startTime.getTime()}`;
 
                 const payload = {
-                    id: `memo-${dateStr}`,
+                    id: memoId,
                     sync_id: sId,
                     starttime: startTime.toISOString(),
                     endtime: null,
@@ -1140,17 +1143,28 @@
             const Home = () => {
                 const sleepingLog = logs.find(l => l.type === 'moon' && !l.endTime);
                 const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
+                const memoFocusRef = useRef(false);
+                const [memoKey, setMemoKey] = useState(0);
+                const currentMemoVal = dailyComments[getLocalDateString()] || '';
+
+                // フォーカス中でなければ、クラウドからの値変更時にkeyを更新して再マウントさせる
+                useEffect(() => {
+                    if (!memoFocusRef.current) {
+                        setMemoKey(k => k + 1);
+                    }
+                }, [currentMemoVal]);
 
                 return (
                     <div className="home-view animate-up">
                         <div style={{ margin: '0 20px 20px' }}>
                             <textarea
-                                key={`memo-${getLocalDateString()}`}
+                                key={`memo-${getLocalDateString()}-${memoKey}`}
                                 className="glass-pane"
                                 style={{ width: '100%', border: 'none', padding: '15px', borderRadius: '20px', fontSize: '14px', minHeight: '80px', resize: 'none' }}
                                 placeholder="今日の予定やメモ..."
-                                defaultValue={dailyComments[getLocalDateString()] || ''}
-                                onBlur={(e) => updateDailyComment(e.target.value)}
+                                defaultValue={currentMemoVal}
+                                onFocus={() => { memoFocusRef.current = true; }}
+                                onBlur={(e) => { memoFocusRef.current = false; updateDailyComment(e.target.value); }}
                             ></textarea>
                         </div>
 
