@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Baby Log | 育児記録</title>
+    <meta name="description" content="赤ちゃんの成長を夫婦で記録・共有するスマートな育児ログアプリ">
+
+    <!-- External Libraries -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Google Search Console & AdSense (Common Tags) -->
+    <meta name="google-site-verification" content="ECNA6rCMysSFdAgO_tGT5OFHiEhy1hy99Dxd0-k-lWQ" />
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5383957100145583"
+        crossorigin="anonymous"></script>
+
+    <style>
+        /* 追加のコンテナ調整（中央寄せとスマホUI最適化） */
+        .container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 予測カードのスタイル */
+        .prediction-card {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            align-items: center;
+        }
+
+        .prediction-item {
+            flex: 1;
+            text-align: center;
+        }
+
+        .prediction-label {
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-bottom: 3px;
+        }
+
+        .prediction-time {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        /* 週間バーティカルグラフ用のスタイル */
+        .vertical-layout {
+            display: flex;
+            height: 480px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .v-time-axis {
+            width: 40px;
+            height: 100%;
+            border-right: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px 0;
+            background: rgba(255, 255, 255, 0.2);
+            z-index: 10;
+        }
+
+        .v-time-label {
+            font-size: 10px;
+            color: #95a5a6;
+            text-align: center;
+            height: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .v-scroll-area {
+            flex: 1;
+            overflow-x: auto;
+            display: flex;
+            padding: 20px 0;
+            scroll-behavior: smooth;
+        }
+
+        .v-day-column {
+            min-width: 60px;
+            height: 100%;
+            position: relative;
+            border-right: 1px solid rgba(0, 0, 0, 0.03);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .v-day-header {
+            position: absolute;
+            top: -15px;
+            font-size: 10px;
+            color: #7f8c8d;
+            white-space: nowrap;
+        }
+
+        .v-sleep-bar {
+            position: absolute;
+            width: 20px;
+            background: linear-gradient(to bottom, #9b59b6, #8e44ad);
+            border-radius: 10px;
+            opacity: 0.7;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .v-plot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 5;
+        }
+
+        .badge-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .stat-badge {
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 20px;
+            text-align: center;
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap');
+
+        :root {
+            --primary: #4A90E2;
+            --primary-light: #E3F2FD;
+            --bg-gradient: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%);
+            --milk: #81C784;
+            --diaper: #FFB74D;
+            --sleep: #9575CD;
+            --text-main: #2C3E50;
+            --text-sub: #7F8C8D;
+            --white: #FFFFFF;
+            --glass: rgba(255, 255, 255, 0.7);
+            --radius-l: 24px;
+            --radius-m: 16px;
+            --shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            background-size: cover;
+            min-height: 100vh;
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            padding-bottom: 100px;
+            /* 余白を少し増量 */
+        }
+
+        #root {
+            width: 100%;
+            max-width: 500px;
+            background: transparent;
+            min-height: 100vh;
+            position: relative;
+            padding: 20px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        /* Glassmorphism Generic */
+        .glass-pane {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: var(--shadow);
+            border-radius: var(--radius-l);
+        }
+
+        /* Header */
+        .header {
+            margin-bottom: 30px;
+            padding: 10px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: var(--primary);
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--text-sub);
+        }
+
+        /* Action Buttons Grid */
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .action-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 10px;
+            cursor: pointer;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .action-card:active {
+            transform: scale(0.95);
+        }
+
+        .action-card i {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .action-card p {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .action-card.milk {
+            color: var(--milk);
+        }
+
+        .action-card.diaper {
+            color: var(--diaper);
+        }
+
+        .action-card.sleep {
+            color: var(--sleep);
+        }
+
+        /* Timeline */
+        .timeline-container {
+            padding: 0 0 20px;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            padding: 14px 18px;
+            margin: 0 20px 10px;
+            border-radius: var(--radius-m);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .timeline-item:active {
+            transform: scale(0.98);
+        }
+
+        .timeline-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 14px;
+            flex-shrink: 0;
+        }
+
+        .timeline-icon i {
+            width: 22px;
+            height: 22px;
+        }
+
+        .timeline-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .timeline-time {
+            font-size: 12px;
+            color: var(--text-sub);
+            margin-bottom: 2px;
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .timeline-note {
+            font-size: 11px;
+            color: var(--text-sub);
+            margin-top: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .timeline-value {
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--text-main);
+            margin-left: 10px;
+            white-space: nowrap;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 14px 20px;
+            border: none;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            text-align: center;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 6px 16px rgba(74, 144, 226, 0.3);
+        }
+
+        /* Type Chips */
+        .type-chip {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: 1.5px solid #eee;
+            background: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .type-chip.active {
+            background: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* List */
+        .timeline-section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .log-item {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: var(--radius-m);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s ease;
+        }
+
+        .log-item:active {
+            background: #f9f9f9;
+        }
+
+        .log-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 20px;
+        }
+
+        .log-icon.milk {
+            background: rgba(129, 199, 132, 0.1);
+            color: var(--milk);
+        }
+
+        .log-icon.diaper {
+            background: rgba(255, 183, 77, 0.1);
+            color: var(--diaper);
+        }
+
+        .log-icon.sleep {
+            background: rgba(149, 117, 205, 0.1);
+            color: var(--sleep);
+        }
+
+        .log-info {
+            flex-grow: 1;
+        }
+
+        .log-title {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .log-time {
+            font-size: 12px;
+            color: var(--text-sub);
+        }
+
+        .log-value {
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--text-main);
+        }
+
+        /* Bottom Nav */
+        .bottom-nav {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 460px;
+            height: 65px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 100;
+        }
+
+        /* bottom-navはglass-pane:activeの影響を受けない */
+        .bottom-nav:active {
+            transform: translateX(-50%) !important;
+            opacity: 1 !important;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-sub);
+            cursor: pointer;
+            font-size: 10px;
+            transition: color 0.2s ease, transform 0.15s ease;
+            padding: 8px 12px;
+            /* タップ領域を広く */
+            min-width: 60px;
+            min-height: 48px;
+            /* 最低48pxのタップターゲット */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .nav-item:active {
+            transform: scale(0.9);
+            opacity: 0.8;
+        }
+
+        .nav-item.active {
+            color: var(--primary);
+        }
+
+        .nav-item i {
+            font-size: 24px;
+            margin-bottom: 2px;
+        }
+
+        /* Modal / Drawer */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: flex-end;
+            /* Drawer style */
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease, visibility 0.3s;
+        }
+
+        .modal-overlay.open {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .drawer {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 32px 32px 0 0;
+            padding: 30px 20px 40px;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .modal-overlay.open .drawer {
+            transform: translateY(0);
+        }
+
+        .drawer h2 {
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .input-group {
+            margin-bottom: 25px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: var(--text-sub);
+            font-size: 14px;
+        }
+
+        /* Custom Input Styles */
+        input[type="number"],
+        input[type="time"],
+        input[type="date"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid #eee;
+            background: #f8f9fa;
+            font-size: 16px;
+            outline: none;
+            transition: border 0.3s ease;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-save {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 16px rgba(74, 144, 226, 0.3);
+            transition: transform 0.2s ease;
+        }
+
+        .btn-save:active {
+            transform: scale(0.98);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-up {
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        /* --- Mobile Specific Optimization --- */
+
+        /* スクロールバーを隠す (グラフ用) */
+        .scroll-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .scroll-container {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 削除ボタンのスタイル（保存ボタンと区別） */
+        .btn-delete-mobile {
+            background: transparent;
+            color: #e74c3c;
+            border: 1px solid #ffcdd2;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            opacity: 0.8;
+            text-align: center;
+        }
+
+        /* タップフィードバック（タイムラインのみ） */
+        .timeline-item:active {
+            opacity: 0.7;
+            transform: scale(0.98);
+        }
+
+        /* iOSの入力時ズーム防止 */
+        @media screen and (max-width: 480px) {
+
+            input,
+            select,
+            textarea {
+                font-size: 16px !important;
+            }
+        }
+
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+
+        .sync-status.on {
+            background: rgba(46, 204, 113, 0.1);
+            color: #27ae60;
+        }
+
+        .sync-status.off {
+            background: rgba(149, 165, 166, 0.1);
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const getLocalDateString = (d = new Date()) => {
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        };
+
+        const BabyLogApp = () => {
+            const [logs, setLogs] = useState([]);
+            const [dailyComments, setDailyComments] = useState({});
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [activeTab, setActiveTab] = useState('home');
+            const [editingLog, setEditingLog] = useState(null);
+            const [formType, setFormType] = useState('milk');
+
+            // Form Fields
+            const [formValue, setFormValue] = useState(100);
+            const [formSubValue, setFormSubValue] = useState('both');
+            const [formDate, setFormDate] = useState('');
+            const [formTime, setFormTime] = useState('');
+            const [formEndDate, setFormEndDate] = useState('');
+            const [formEndTime, setFormEndTime] = useState('');
+            const [formNote, setFormNote] = useState('');
+
+            // 統計表示用の日付（デフォルトは「今日」）
+            const [statsDate, setStatsDate] = useState(getLocalDateString());
+
+            // Supabase Settings
+            const [supabaseUrl, setSupabaseUrl] = useState(localStorage.getItem('baby_sb_url') || '');
+            const [supabaseKey, setSupabaseKey] = useState(localStorage.getItem('baby_sb_key') || '');
+            const [syncId, setSyncId] = useState(localStorage.getItem('baby_sync_id') || '');
+            const [isSyncEnabled, setIsSyncEnabled] = useState(localStorage.getItem('baby_sync_enabled') === 'true');
+            const [syncStatus, setSyncStatus] = useState('offline'); // offline, connecting, synced, error
+            const supabase = useRef(null);
+
+            // 15分刻みの選択肢を生成 (00:00, 00:15, ..., 23:45)
+            const timeOptions = [];
+            for (let h = 0; h < 24; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    timeOptions.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                }
+            }
+
+            // 1. 初期ロード
+            useEffect(() => {
+                const savedLogs = localStorage.getItem('baby_logs');
+                if (savedLogs) {
+                    try {
+                        const parsed = JSON.parse(savedLogs);
+                        setLogs(parsed.map(log => ({
+                            ...log,
+                            startTime: new Date(log.startTime),
+                            endTime: log.endTime ? new Date(log.endTime) : null
+                        })));
+                    } catch (e) { console.error("Data Parse Error", e); }
+                }
+                const savedComments = localStorage.getItem('baby_daily_comments');
+                if (savedComments) setDailyComments(JSON.parse(savedComments));
+
+                setTimeout(() => lucide.createIcons(), 100);
+            }, []);
+
+
+            // ユーザー提供の高品質アイコン
+            const BottleIcon = ({ size = 24, color = "currentColor" }) => (
+                <svg width={size} height={size} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill={color} d="M288.209,331.768c-13.486,0-25.843-2.991-37.793-5.891c-11.956-2.888-24.313-5.885-37.688-5.885c-10.64,0-20.838,1.883-31.166,5.753l-4.05,1.509V445.54c0,3.696,1.032,7.11,3.08,10.156c1.974,2.907,4.811,5.254,8.003,6.604c2.257,0.948,4.57,1.419,7.068,1.419h120.653c3.704-0.007,7.117-1.046,10.15-3.088c2.914-1.959,5.254-4.805,6.611-8.017c0.941-2.222,1.412-4.597,1.412-7.054V320.324l-8.619,3.565C313.02,329.186,300.697,331.768,288.209,331.768z" />
+                    <path fill={color} d="M381.115,200.834c0.028-4.888-0.215-21.71-4.458-32.759c-5.303-13.777-19.322-35.134-34.892-47.581c-5.096-4.085-10.911-8.19-17.065-12.538c-7.304-5.157-19.98-14.116-25.255-19.716c0.146-0.235,0.298-0.471,0.443-0.686c4.05-6.265,10.841-16.739,10.841-32.815C310.729,24.563,286.18,0,256.003,0c-30.184,0-54.732,24.563-54.732,54.74c0,16.068,6.791,26.55,10.841,32.815c0.145,0.215,0.298,0.45,0.45,0.686c-5.282,5.593-17.958,14.559-25.262,19.716c-6.148,4.348-11.97,8.453-17.072,12.538c-15.563,12.454-29.588,33.811-34.885,47.581c-4.236,11.049-4.479,27.871-4.458,32.759l0.07,11.603h-0.07v235.719c0,8.626,1.696,16.982,5.061,24.86c4.866,11.402,12.924,21.122,23.295,28.08c10.62,7.13,23.047,10.904,35.93,10.904h121.636c8.674,0,17.1-1.689,25.02-5.026c11.506-4.833,21.295-12.822,28.294-23.123c7.2-10.55,11-22.894,10.994-35.694V212.437h-0.07L381.115,200.834z M155.731,175.905c4.209-10.952,16.151-28.772,28.135-38.367c17.051-13.632,48.163-31.305,51.389-45.269c3.136-13.61-12.15-18.45-12.15-37.529c0-18.18,14.726-32.904,32.898-32.904c18.166,0,32.898,14.725,32.898,32.904c0,19.08-15.293,23.919-12.157,37.529c3.226,13.964,34.338,31.638,51.389,45.269c11.984,9.595,23.926,27.415,28.135,38.367c3.109,8.072,3.012,24.812,3.012,24.812H152.72C152.72,200.717,152.623,183.977,155.731,175.905z M359.653,233.732v16.373v198.051c0,5.753-1.128,11.319-3.364,16.553c-3.233,7.615-8.612,14.094-15.542,18.74c-7.089,4.742-15.376,7.248-23.954,7.255H195.206c-5.788,0-11.402-1.128-16.671-3.343c-7.67-3.213-14.199-8.543-18.879-15.424c-4.784-7.034-7.304-15.259-7.31-23.78V250.105v-16.373v-11.18h0.374h206.56h0.374V233.732z" />
+                </svg>
+            );
+
+            const DropIcon = ({ size = 24, color = "currentColor" }) => (
+                <svg width={size} height={size} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill={color} d="M388.823,191.344L255.995,0L123.183,191.344c-53.875,84.438-73.359,192.281,0,265.641 C159.854,493.656,207.917,512,255.995,512s96.141-18.344,132.828-55.016C462.167,383.625,442.698,275.781,388.823,191.344z M237.339,442.609c-2.359,8.125-10.875,12.797-19,10.438c-21.422-6.234-41.109-17.828-57.25-33.984 c-11.844-11.844-20.125-25.172-25.25-38.953c-5.156-13.797-7.203-27.969-7.203-41.766c0.016-21.266,4.828-41.672,11.109-59.688 c2.797-8,11.531-12.203,19.516-9.406c8,2.781,12.203,11.531,9.406,19.516c-5.531,15.734-9.406,33.016-9.391,49.578 c0,10.781,1.609,21.219,5.266,31.063c3.703,9.844,9.422,19.172,18.234,28c12.531,12.547,27.625,21.406,44.125,26.219 C235.026,425.984,239.683,434.484,237.339,442.609z" />
+                </svg>
+            );
+
+            const BabyIcon = ({ size = 24, color = "currentColor" }) => (
+                <svg width={size} height={size} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill={color} d="M305.406,269.895c6.441,4.993,14.604,7.975,23.367,7.975c8.706,0,16.826-2.938,23.252-7.867 c6.426-4.928,11.246-11.846,13.54-19.872c1.498-5.268-1.556-10.762-6.824-12.259c-5.268-1.505-10.746,1.549-12.245,6.817h-0.007 c-1.086,3.828-3.416,7.179-6.528,9.56c-3.126,2.38-6.94,3.777-11.188,3.777c-4.269,0-8.105-1.418-11.239-3.828 c-3.119-2.41-5.449-5.811-6.513-9.675c-1.462-5.283-6.918-8.38-12.201-6.933c-5.276,1.462-8.38,6.926-6.926,12.202 C294.138,257.903,298.958,264.909,305.406,269.895z" />
+                    <path fill={color} d="M220.091,250.131c1.506-5.262-1.541-10.754-6.809-12.259c-5.269-1.505-10.754,1.542-12.259,6.81 c-1.1,3.836-3.423,7.186-6.535,9.568c-3.126,2.38-6.94,3.777-11.188,3.777c-4.262,0-8.112-1.418-11.239-3.828 c-3.126-2.41-5.45-5.811-6.513-9.675c-1.462-5.283-6.918-8.38-12.201-6.933c-5.283,1.462-8.38,6.926-6.926,12.202 c2.244,8.112,7.056,15.117,13.512,20.104c6.44,4.993,14.61,7.975,23.367,7.975c8.713,0,16.826-2.938,23.244-7.867 C212.978,265.075,217.804,258.157,220.091,250.131z" />
+                    <path fill={color} d="M494.002,217.703c-10.052-10.066-23.715-16.666-38.818-17.773c-9.436-44.376-33.188-83.454-66.173-112.156 c-36.046-31.35-83.229-50.368-134.747-50.368c-51.44,0-98.565,18.96-134.582,50.216c-33.18,28.794-57.04,68.076-66.423,112.676 c-13.692,1.788-26.012,8.134-35.282,17.404C6.897,228.783,0,244.226,0,261.145c0,16.891,6.897,32.334,17.976,43.413 c11.079,11.08,26.522,17.969,43.435,17.969c1.166,0,2.302-0.029,3.438-0.086c14.792,35.142,39.042,65.319,69.603,87.311 c14.046,10.117,29.468,18.504,45.902,24.851c-1.983-6.94-3.004-14.227-3.004-21.652c0-3.423,0.225-6.853,0.674-10.197 c-9.509-4.537-18.548-9.914-27.029-16.008c-29.077-20.921-51.577-50.476-63.734-84.851l-4.393-12.411l-12.693,3.488 c-2.924,0.789-5.811,1.216-8.764,1.216c-9.176,0-17.364-3.684-23.375-9.69c-6.006-6.014-9.694-14.198-9.694-23.353 c0-9.183,3.687-17.375,9.694-23.382c6.01-6.006,14.199-9.69,23.375-9.69c0.572,0,1.418,0.058,2.613,0.138l13.178,1.02l1.954-13.026 c6.404-42.574,27.999-80.176,59.088-107.155c7.772-6.738,16.131-12.809,24.988-18.136c0.767,4.806,1.947,9.307,3.596,13.439 c2.613,6.564,6.274,12.252,10.616,17.108c7.606,8.518,17.122,14.517,27.066,19.431c14.922,7.33,31.045,12.411,44.593,18.743 c6.773,3.141,12.874,6.556,17.875,10.493c5.008,3.959,8.915,8.344,11.702,13.685c1.498,2.887,4.486,4.653,7.743,4.58 c3.257-0.079,6.159-1.982,7.519-4.943c14.698-31.841,20.003-56.895,20.003-76.572c0.022-13.431-2.519-24.294-6.072-32.847 c23.288,7.396,44.499,19.452,62.548,35.128c31.118,27.072,52.654,64.761,59.001,107.436l2.106,14.054l14.053-2.15 c1.867-0.289,3.51-0.427,5.015-0.427c9.176,0,17.339,3.684,23.375,9.69c6.014,6.007,9.661,14.199,9.697,23.382 c-0.036,9.155-3.684,17.34-9.697,23.353c-6.036,6.006-14.198,9.69-23.375,9.69c-3.807,0-7.432-0.688-10.949-1.896l-13.432-4.74 l-4.675,13.431c-12.013,34.606-34.49,64.393-63.618,85.474c-7.62,5.522-15.696,10.457-24.171,14.712 c0.594,3.879,0.876,7.794,0.876,11.782c0,6.89-0.876,13.634-2.576,20.125c15.168-6.23,29.418-14.198,42.48-23.664 c30.409-22.021,54.551-52.148,69.263-87.282c2.208,0.253,4.501,0.398,6.803,0.398c16.912,0,32.334-6.889,43.406-17.969 C505.089,293.479,512,278.036,512,261.145C512,244.226,505.089,228.783,494.002,217.703z M221.64,130.008 c-12.324-5.195-23.143-10.999-30.474-18.736c-3.69-3.879-6.586-8.214-8.648-13.46c-1.701-4.364-2.786-9.459-3.119-15.465 c11.123-5.204,22.875-9.307,35.128-12.115c0.058,9.626,2.294,24.692,11.868,42.798c4.277,8.12,10.023,16.818,17.636,25.936 C236.425,135.899,228.804,133.041,221.64,130.008z M286.677,156.64c-23.918-19.235-37.53-36.936-45.244-51.548 c-8.387-15.906-9.893-28.201-9.907-35.322c0-0.956,0.029-1.795,0.073-2.554c7.424-0.948,14.979-1.469,22.666-1.469 c10.413,0,20.602,0.933,30.503,2.648c1.027,1.186,2.098,2.547,3.154,4.146c4.48,6.789,8.988,17.448,9.024,34.338 C296.953,119.638,294.268,136.023,286.677,156.64z" />
+                    <path fill={color} d="M256,351.33c-16.962-0.007-32.471,6.926-43.579,18.056c-11.13,11.101-18.056,26.61-18.049,43.579 c-0.008,16.971,6.918,32.479,18.049,43.58c11.108,11.13,26.617,18.056,43.579,18.048c16.977,0.007,32.478-6.918,43.588-18.048 c11.13-11.101,18.055-26.609,18.048-43.58c0.007-16.97-6.918-32.478-18.048-43.579C288.478,358.255,272.977,351.323,256,351.33z M284.672,425.072c-2.344,5.558-6.318,10.342-11.282,13.699c-4.986,3.358-10.891,5.298-17.39,5.305 c-4.334-0.008-8.387-0.876-12.1-2.446c-5.565-2.345-10.341-6.311-13.699-11.282c-3.358-4.986-5.298-10.891-5.304-17.383 c0-4.342,0.868-8.394,2.438-12.107c2.352-5.558,6.31-10.342,11.282-13.699c4.986-3.358,10.892-5.297,17.382-5.304 c4.342,0.008,8.395,0.875,12.107,2.439c5.565,2.352,10.349,6.318,13.706,11.289c3.358,4.979,5.29,10.891,5.298,17.382 C287.111,417.3,286.243,421.353,284.672,425.072z" />
+                    <path fill={color} d="M256.008,314.365c-41.857,0-75.812,20.291-75.812,45.338c0,7.483,3.04,14.546,8.417,20.777 c3.256-5.384,7.23-10.428,11.788-14.994c14.821-14.842,34.577-23.034,55.578-23.034c21.081,0,40.808,8.192,55.651,23.071 c4.566,4.53,8.502,9.574,11.767,14.958c5.376-6.231,8.416-13.294,8.416-20.777C331.812,334.656,297.887,314.365,256.008,314.365z" />
+                </svg>
+            );
+
+            const PooIcon = ({ size = 24, color = "currentColor" }) => (
+                <svg width={size} height={size} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill={color} d="M421.813,327.728c32.953-49.156,5.344-115.031-57.219-127.203c32.453-30.547,7-75.625-28.5-91.594 c-18.031-8.109-24.891-17.688-30.875-27.672c-11.469-19.078-15.688-46.438-45.813-62.016c-20.75-10.75-50.094-13.609-65.844-4.297 c-10.594,6.25,1.688,9.125,10.75,16.453c15.031,12.172,15.75,31.484,2.594,47c-16.906,19.984-30.5,24.797-45.781,30.531 c-36.438,13.656-61.531,61.047-29.094,91.594c-63.5,12.359-90.563,80.063-55.172,129.438C32.844,340.243,0,379.649,0,426.821 c0,30.406,13.672,57.578,35.156,75.844h441.688C498.313,484.399,512,457.228,512,426.821 C512,374.993,472.406,332.462,421.813,327.728z" />
+                </svg>
+            );
+
+            const BathIcon = ({ size = 24, color = "currentColor" }) => (
+                <svg width={size} height={size} viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill={color} d="M169.756,469.575h172.488c90.836,0,164.466-73.63,164.466-164.466H5.29 C5.29,395.945,78.92,469.575,169.756,469.575z" />
+                    <path fill={color} d="M23.137,248.95v-49.437c0-27.296,7.976-53.949,22.744-76.842l4.755,3.612l12.724-14.878L37.953,91.959 L27.219,108.49l4.521,3.431c-17.096,26.003-26.317,56.426-26.317,87.592v49.437H5.29v32.091h501.42V248.95H23.137z" />
+                    <path fill={color} d="M96.69,71.62l5.382,3.76l38.836-50.769L119.175,5.269l-3.306-2.507c-2.852-2.194-6.479-3.126-10.02-2.632 c-3.573,0.494-6.785,2.397-8.924,5.273c0,0-10.373,10.968-14.769,17.071C44.463,74.676,41.98,85.715,41.98,85.715l26.019,19.9 L96.69,71.62z" />
+                </svg>
+            );
+
+            // 2. 保存
+            useEffect(() => {
+                localStorage.setItem('baby_logs', JSON.stringify(logs));
+                localStorage.setItem('baby_daily_comments', JSON.stringify(dailyComments));
+                lucide.createIcons();
+            }, [logs, dailyComments, activeTab, isModalOpen]);
+
+            // 3. Supabase 同期設定
+            useEffect(() => {
+                localStorage.setItem('baby_sb_url', supabaseUrl);
+                localStorage.setItem('baby_sb_key', supabaseKey);
+                localStorage.setItem('baby_sync_id', syncId);
+                localStorage.setItem('baby_sync_enabled', isSyncEnabled);
+
+                if (isSyncEnabled && supabaseUrl && supabaseKey && syncId) {
+                    try {
+                        if (!window.supabase) {
+                            setSyncStatus('error: 接続ライブラリが読み込めていません');
+                            return;
+                        }
+                        // 空白を自動除去して接続
+                        supabase.current = window.supabase.createClient(supabaseUrl.trim(), supabaseKey.trim());
+                        startSync();
+                    } catch (e) {
+                        console.error("Supabase Init Error", e);
+                        setSyncStatus(`error: ${e.message}`);
+                    }
+                } else {
+                    setSyncStatus('offline');
+                }
+            }, [isSyncEnabled, supabaseUrl, supabaseKey, syncId]);
+
+            const startSync = async () => {
+                setSyncStatus('connecting');
+                const sId = syncId.trim();
+
+                try {
+                    // 初回ダウンロード（クラウドが優先）
+                    const { data, error } = await supabase.current
+                        .from('baby_logs')
+                        .select('*')
+                        .eq('sync_id', sId)
+                        .order('starttime', { ascending: false });
+
+                    if (error) {
+                        console.error("Sync Download Error", error);
+                        setSyncStatus(`error: ${error.message}`);
+                        return;
+                    }
+
+                    if (data && data.length > 0) {
+                        const cloudLogs = data.map(d => ({
+                            ...d.data,
+                            id: d.id,
+                            startTime: new Date(d.starttime),
+                            endTime: d.endtime ? new Date(d.endtime) : null
+                        }));
+                        setLogs(cloudLogs);
+                    } else if (logs.length > 0) {
+                        // クラウドが空でローカルにデータがある場合、全件アップロード（初期移行）
+                        for (const log of logs) {
+                            await syncToCloud('upsert', log);
+                        }
+                    }
+                    setSyncStatus('synced');
+
+                    // リアルタイム購読開始
+                    const channel = supabase.current
+                        .channel('schema-db-changes')
+                        .on('postgres_changes', {
+                            event: '*',
+                            schema: 'public',
+                            table: 'baby_logs',
+                            filter: `sync_id=eq.${sId}`
+                        }, payload => {
+                            fetchLogs();
+                        })
+                        .subscribe();
+
+                    return () => {
+                        supabase.current.removeChannel(channel);
+                    };
+                } catch (e) {
+                    setSyncStatus(`error: ${e.message}`);
+                }
+            };
+
+            const fetchLogs = async () => {
+                const sId = syncId.trim();
+                const { data } = await supabase.current
+                    .from('baby_logs')
+                    .select('*')
+                    .eq('sync_id', sId)
+                    .order('starttime', { ascending: false });
+
+                if (data) {
+                    const cloudLogs = data.map(d => ({
+                        ...d.data,
+                        id: d.id,
+                        startTime: new Date(d.starttime),
+                        endTime: d.endtime ? new Date(d.endtime) : null
+                    }));
+                    setLogs(cloudLogs);
+                }
+            };
+
+            const syncToCloud = async (logAction, logData) => {
+                if (!isSyncEnabled || !supabase.current) return;
+                const sId = syncId.trim();
+
+                const payload = {
+                    sync_id: sId,
+                    starttime: logData.startTime.toISOString(),
+                    endtime: logData.endTime ? logData.endTime.toISOString() : null,
+                    type: logData.type,
+                    data: logData // 全データをJSONBとして保持
+                };
+
+                if (logAction === 'delete') {
+                    await supabase.current.from('baby_logs').delete().eq('id', logData.id);
+                } else {
+                    await supabase.current.from('baby_logs').upsert({
+                        id: logData.id,
+                        ...payload
+                    });
+                }
+            };
+
+            const getLogsForDate = (date) => {
+                const dayStart = new Date(date);
+                dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(date);
+                dayEnd.setHours(23, 59, 59, 999);
+
+                const result = [];
+                logs.forEach(log => {
+                    const lStart = new Date(log.startTime);
+                    const lEnd = log.endTime ? new Date(log.endTime) : (log.type === 'moon' ? new Date() : lStart);
+
+                    if (lEnd < dayStart || lStart > dayEnd) return;
+
+                    if (log.type === 'moon') {
+                        const displayStart = lStart < dayStart ? dayStart : lStart;
+                        const displayEnd = lEnd > dayEnd ? dayEnd : lEnd;
+                        result.push({
+                            ...log,
+                            displayStartTime: displayStart,
+                            displayEndTime: log.endTime ? displayEnd : (lEnd > dayEnd ? null : displayEnd),
+                            isSplitStart: lStart < dayStart,
+                            isSplitEnd: lEnd > dayEnd
+                        });
+                    } else {
+                        if (lStart >= dayStart && lStart <= dayEnd) {
+                            result.push({ ...log, displayStartTime: lStart, displayEndTime: lEnd });
+                        }
+                    }
+                });
+                return result.sort((a, b) => b.displayStartTime - a.displayStartTime);
+            };
+
+            const formatTime = (date) => {
+                if (!(date instanceof Date) || isNaN(date)) return "--:--";
+                return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+            };
+
+            const formatDate = (date) => {
+                return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', weekday: 'short' });
+            };
+
+            const getDuration = (start, end) => {
+                if (!start || !end) return "";
+                const diffMs = end - start;
+                const diffMins = Math.floor(diffMs / 60000);
+                const hrs = Math.floor(diffMins / 60);
+                const mins = diffMins % 60;
+                return hrs > 0 ? `${hrs}時間${mins}分` : `${mins}分`;
+            };
+
+            const openForm = (type, log = null) => {
+                const now = new Date();
+                const dStr = getLocalDateString(now);
+                const tStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+                if (log) {
+                    setEditingLog(log);
+                    setFormType(log.type);
+                    setFormValue(log.value || 100);
+                    setFormSubValue(log.subValue || 'both');
+                    const logTime = new Date(log.startTime);
+                    setFormDate(getLocalDateString(logTime));
+                    setFormTime(`${String(logTime.getHours()).padStart(2, '0')}:${String(logTime.getMinutes()).padStart(2, '0')}`);
+                    if (log.endTime) {
+                        const endT = new Date(log.endTime);
+                        setFormEndDate(getLocalDateString(endT));
+                        setFormEndTime(`${String(endT.getHours()).padStart(2, '0')}:${String(endT.getMinutes()).padStart(2, '0')}`);
+                    } else {
+                        // ねんね中の場合、デフォルトで「今」の時間をセット（おきた！用）
+                        setFormEndDate(dStr);
+                        setFormEndTime(tStr);
+                    }
+                    setFormNote(log.note || '');
+                } else {
+                    setEditingLog(null);
+                    setFormType(type);
+                    setFormValue(type === 'milk' ? 100 : 0);
+                    setFormSubValue('both');
+                    setFormDate(dStr);
+                    setFormTime(tStr);
+                    setFormEndDate(dStr);
+                    setFormEndTime('');
+                    setFormNote('');
+                }
+                setIsModalOpen(true);
+            };
+
+            const handleSave = () => {
+                if (!formTime || !formDate) return;
+                const [y, mm, d] = formDate.split('-');
+                const [h, m] = formTime.split(':');
+                const startTime = new Date(parseInt(y), parseInt(mm) - 1, parseInt(d), parseInt(h), parseInt(m), 0);
+
+                let endTime = null;
+                if (formEndTime) {
+                    const [ey, emm, ed] = formEndDate.split('-');
+                    const [eh, em] = formEndTime.split(':');
+                    endTime = new Date(parseInt(ey), parseInt(emm) - 1, parseInt(ed), parseInt(eh), parseInt(em), 0);
+                }
+
+                const newLog = {
+                    id: editingLog ? editingLog.id : Date.now().toString(),
+                    type: formType,
+                    startTime: startTime.toISOString(),
+                    endTime: endTime ? endTime.toISOString() : null,
+                    value: formType === 'milk' ? parseInt(formValue) : null,
+                    subValue: formType === 'diaper' ? formSubValue : null,
+                    note: formNote
+                };
+
+                const processedLog = {
+                    ...newLog,
+                    startTime: new Date(newLog.startTime),
+                    endTime: newLog.endTime ? new Date(newLog.endTime) : null
+                };
+
+                let updatedLogs = editingLog
+                    ? logs.map(l => l.id === editingLog.id ? processedLog : l)
+                    : [processedLog, ...logs];
+
+                // 時刻順（降順）にソート
+                updatedLogs.sort((a, b) => b.startTime - a.startTime);
+                setLogs(updatedLogs);
+                syncToCloud(editingLog ? 'update' : 'upsert', processedLog); // 同期実行
+                setIsModalOpen(false);
+            };
+
+            const handleWakeUp = (log) => {
+                const now = new Date();
+                const updated = { ...log, endTime: now };
+                setLogs(logs.map(l => l.id === log.id ? updated : l));
+                syncToCloud('update', updated); // 同期実行
+            };
+
+            const deleteLog = (id) => {
+                if (confirm('この記録を削除しますか？')) {
+                    const logToDelete = logs.find(l => l.id === id);
+                    setLogs(logs.filter(l => l.id !== id));
+                    if (logToDelete) syncToCloud('delete', logToDelete); // 同期実行
+                    setIsModalOpen(false);
+                }
+            };
+
+            const updateDailyComment = (val) => {
+                const dStr = getLocalDateString();
+                setDailyComments({ ...dailyComments, [dStr]: val });
+            };
+
+            const viewStatsForDate = (dateStr) => {
+                const d = new Date(dateStr);
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                setStatsDate(`${y}-${m}-${day}`);
+                setActiveTab('stats');
+            };
+
+            const lastMilkLog = logs.filter(l => l.type === 'milk')[0];
+            let nextMilkTime = null;
+            let bathTimeTarget = null;
+            if (lastMilkLog) {
+                nextMilkTime = new Date(lastMilkLog.startTime);
+                nextMilkTime.setHours(nextMilkTime.getHours() + 3);
+                const h = nextMilkTime.getHours();
+                if (h >= 20 || h < 1) {
+                    bathTimeTarget = new Date(nextMilkTime);
+                    bathTimeTarget.setHours(bathTimeTarget.getHours() - 1);
+                }
+            }
+
+            const Home = () => {
+                const sleepingLog = logs.find(l => l.type === 'moon' && !l.endTime);
+                const todayStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
+
+                return (
+                    <div className="home-view animate-up">
+                        <div style={{ margin: '0 20px 20px' }}>
+                            <textarea
+                                className="glass-pane"
+                                style={{ width: '100%', border: 'none', padding: '15px', borderRadius: '20px', fontSize: '14px', minHeight: '80px', resize: 'none' }}
+                                placeholder="今日の予定やメモ..."
+                                value={dailyComments[getLocalDateString()] || ''}
+                                onChange={(e) => updateDailyComment(e.target.value)}
+                            ></textarea>
+                        </div>
+
+                        {(nextMilkTime || bathTimeTarget) && (
+                            <div className="prediction-card glass-pane animate-up" style={{ margin: '0 20px 20px', padding: '15px', display: 'flex', borderRadius: '20px', background: 'rgba(255,255,255,0.6)' }}>
+                                <div style={{ flex: 1, textAlign: 'center', borderRight: '1px solid rgba(0,0,0,0.05)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginBottom: '5px' }}>
+                                        <BottleIcon size={14} color="var(--milk)" />
+                                        <span style={{ fontSize: '12px', color: '#7f8c8d' }}>次の授乳目安</span>
+                                    </div>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--primary)' }}>{formatTime(nextMilkTime)}</div>
+                                </div>
+                                <div style={{ flex: 1, textAlign: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginBottom: '5px' }}>
+                                        <BathIcon size={14} color="#3498db" />
+                                        <span style={{ fontSize: '12px', color: '#7f8c8d' }}>沐浴の目安</span>
+                                    </div>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--primary)' }}>{formatTime(bathTimeTarget)}</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {sleepingLog && (
+                            <div className="glass-pane animate-up" style={{ margin: '0 20px 20px', padding: '20px', textAlign: 'center', border: '2px solid var(--primary)', background: 'rgba(155, 89, 182, 0.05)', borderRadius: '20px' }}>
+                                <div style={{ fontSize: '14px', color: 'var(--primary)', fontWeight: 'bold', marginBottom: '10px' }}>😴 ねんね中...</div>
+                                <button className="btn btn-primary" onClick={() => openForm('moon', sleepingLog)}>
+                                    <i data-lucide="sun" style={{ marginRight: '8px' }}></i>起きた！
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="action-grid" style={{ margin: '0 20px 20px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
+                            <div className="glass-pane action-card milk" onClick={() => openForm('milk')} style={{ padding: '20px', textAlign: 'center', borderRadius: '20px', cursor: 'pointer' }}>
+                                <div style={{ marginBottom: '5px' }}>
+                                    <BottleIcon size={32} color="var(--milk)" />
+                                </div>
+                                <p style={{ marginTop: '5px', fontSize: '14px', fontWeight: 'bold', color: 'var(--milk)' }}>ミルク</p>
+                            </div>
+                            <div className="glass-pane action-card diaper" onClick={() => openForm('diaper')} style={{ padding: '20px', textAlign: 'center', borderRadius: '20px', cursor: 'pointer' }}>
+                                <div style={{ marginBottom: '5px' }}>
+                                    <DropIcon size={32} color="var(--diaper)" />
+                                </div>
+                                <p style={{ marginTop: '5px', fontSize: '14px', fontWeight: 'bold', color: 'var(--diaper)' }}>オムツ</p>
+                            </div>
+                            <div className="glass-pane action-card sleep" onClick={() => openForm('moon')} style={{ padding: '20px', textAlign: 'center', borderRadius: '20px', cursor: 'pointer' }}>
+                                <div style={{ marginBottom: '5px' }}>
+                                    <BabyIcon size={32} color="var(--sleep)" />
+                                </div>
+                                <p style={{ marginTop: '5px', fontSize: '14px', fontWeight: 'bold', color: 'var(--sleep)' }}>睡眠</p>
+                            </div>
+                        </div>
+
+                        <div className="timeline-container">
+                            <h2 style={{ padding: '0 20px 15px' }}>タイムライン</h2>
+                            {getLogsForDate(new Date()).map(log => (
+                                <div key={log.id + (log.isSplitStart ? '-split' : '')} className="timeline-item glass-pane animate-up" onClick={() => openForm(log.type, log)}>
+                                    <div className="timeline-icon" style={{ backgroundColor: log.type === 'milk' ? 'rgba(129, 199, 132, 0.1)' : log.type === 'diaper' ? 'rgba(255, 183, 77, 0.1)' : 'rgba(149, 117, 205, 0.1)' }}>
+                                        {log.type === 'milk' ? (
+                                            <BottleIcon size={20} color="var(--milk)" />
+                                        ) : log.type === 'diaper' ? (
+                                            <DropIcon size={20} color="var(--diaper)" />
+                                        ) : (
+                                            <BabyIcon size={20} color="var(--sleep)" />
+                                        )}
+                                    </div>
+                                    <div className="timeline-content">
+                                        <div className="timeline-time">
+                                            {log.isSplitStart ? '00:00' : formatTime(log.displayStartTime)}
+                                            {log.isSplitEnd && ' 〜 24:00'}
+                                        </div>
+                                        <div className="timeline-title">
+                                            {log.type === 'milk' ? 'ミルク' : log.type === 'diaper' ? 'オムツ' : '睡眠'}
+                                            {(log.isSplitStart || log.isSplitEnd) && <span style={{ fontSize: '10px', opacity: 0.6, marginLeft: '5px' }}>(日またぎ)</span>}
+                                        </div>
+                                        {log.note && <div className="timeline-note">{log.note}</div>}
+                                    </div>
+                                    <div className="timeline-value">
+                                        {log.type === 'milk' ? `${log.value}ml` : log.type === 'diaper' ? (log.subValue === 'pee' ? 'おしっこ' : log.subValue === 'poo' ? 'うんち' : '両方') : (log.displayEndTime ? getDuration(log.displayStartTime, log.displayEndTime) : 'ねんね中')}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            const SleepGraph = () => {
+                // 表示基準日（statsDate）から過去7日分の日付を生成
+                const baseDate = new Date(statsDate);
+                const days = [];
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(baseDate);
+                    d.setDate(d.getDate() - i);
+                    d.setHours(0, 0, 0, 0);
+                    days.push(d);
+                }
+                days.reverse(); // 古い順に
+
+                const getTopPercent = (date) => {
+                    const d = new Date(date);
+                    const mins = (d.getHours() * 60) + d.getMinutes();
+                    return (mins / 1440) * 100;
+                };
+
+                const scrollRef = useRef(null);
+                useEffect(() => {
+                    if (scrollRef.current) scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+                }, []);
+
+                return (
+                    <div className="vertical-layout animate-up">
+                        <div className="v-time-axis">
+                            {[0, 6, 12, 18, 24].map(h => (
+                                <div key={h} className="v-time-label" style={{ top: `${(h / 24) * 100}%` }}>{h}</div>
+                            ))}
+                        </div>
+                        <div className="v-scroll-area" ref={scrollRef}>
+                            {days.map((day, idx) => {
+                                const dayLogs = getLogsForDate(day);
+
+                                return (
+                                    <div key={idx} className="v-day-column" onClick={() => viewStatsForDate(day)} style={{ cursor: 'pointer' }}>
+                                        <div className="v-day-header">{day.getMonth() + 1}/{day.getDate()}</div>
+                                        {/* 睡眠バー */}
+                                        {dayLogs.filter(l => l.type === 'moon').map(log => {
+                                            const start = getTopPercent(log.displayStartTime);
+                                            const end = log.displayEndTime ? getTopPercent(log.displayEndTime) : 100;
+                                            const top = Math.min(start, end);
+                                            const height = Math.abs(end - start);
+                                            return <div key={log.id + (log.isSplitStart ? '-split' : '')} className="v-sleep-bar" style={{ top: `${top}%`, height: `${Math.max(2, height)}%`, pointerEvents: 'none' }}></div>;
+                                        })}
+                                        {/* 授乳・オムツプロット */}
+                                        {dayLogs.filter(l => l.type !== 'moon').map(log => (
+                                            <div key={log.id} className="v-plot" style={{
+                                                top: `${getTopPercent(log.displayStartTime)}%`,
+                                                backgroundColor: log.type === 'milk' ? '#81C784' : '#ffb74d',
+                                                pointerEvents: 'none'
+                                            }}></div>
+                                        ))}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            };
+
+            const Stats = () => {
+                const isToday = statsDate === getLocalDateString();
+                const displayDate = new Date(statsDate);
+                const filtered = getLogsForDate(displayDate);
+
+                // ミルク統計
+                const milkLogs = filtered.filter(l => l.type === 'milk');
+                const milkT = milkLogs.reduce((sum, l) => sum + (l.value || 0), 0);
+                const milkAvg = milkLogs.length > 0 ? Math.round(milkT / milkLogs.length) : 0;
+
+                // オムツ統計
+                const diaperLogs = filtered.filter(l => l.type === 'diaper');
+                const peeCount = diaperLogs.filter(l => l.subValue === 'pee' || l.subValue === 'both').length;
+                const pooCount = diaperLogs.filter(l => l.subValue === 'poo' || l.subValue === 'both').length;
+
+                // 睡眠統計
+                const sleepLogs = filtered.filter(l => l.type === 'moon');
+                const totalSleepMs = sleepLogs.reduce((sum, l) => {
+                    if (!l.displayEndTime) return sum;
+                    return sum + (l.displayEndTime - l.displayStartTime);
+                }, 0);
+                const sleepHrs = Math.floor(totalSleepMs / 3600000);
+                const sleepMins = Math.floor((totalSleepMs % 3600000) / 60000);
+
+                return (
+                    <div className="stats-view animate-up" style={{ paddingBottom: '20px' }}>
+                        <div className="glass-pane" style={{ padding: '24px', marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                <h2 style={{ margin: 0 }}>{isToday ? '今日のサマリー' : `${displayDate.getMonth() + 1}/${displayDate.getDate()}のサマリー`}</h2>
+                                {!isToday && (
+                                    <button className="btn" style={{ padding: '6px 12px', fontSize: '12px', background: 'var(--primary-light)', color: 'var(--primary)' }} onClick={() => setStatsDate(getLocalDateString())}>
+                                        今日に戻る
+                                    </button>
+                                )}
+                            </div>
+                            {filtered.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '30px', background: 'rgba(0,0,0,0.03)', borderRadius: '16px', color: '#7f8c8d' }}>
+                                    <i data-lucide="info" style={{ marginBottom: '8px', opacity: 0.5 }}></i>
+                                    <p>指定された日のデータはありません</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '10px' }}>
+                                    <div style={{ background: 'rgba(129, 199, 132, 0.1)', padding: '12px 8px', borderRadius: '16px', textAlign: 'center' }}>
+                                        <p style={{ fontSize: '10px', color: 'var(--milk)', fontWeight: 'bold' }}>ミルク</p>
+                                        <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{milkT}<span style={{ fontSize: '10px' }}>ml</span></div>
+                                        <div style={{ fontSize: '9px', color: '#7f8c8d', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                            <BottleIcon size={10} color="var(--milk)" />{milkLogs.length}回
+                                        </div>
+                                    </div>
+                                    <div style={{ background: 'rgba(255, 183, 77, 0.1)', padding: '12px 8px', borderRadius: '16px', textAlign: 'center' }}>
+                                        <p style={{ fontSize: '10px', color: 'var(--diaper)', fontWeight: 'bold' }}>オムツ</p>
+                                        <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{diaperLogs.length}<span style={{ fontSize: '10px' }}>回</span></div>
+                                        <div style={{ fontSize: '9px', color: '#7f8c8d', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                            <DropIcon size={10} color="var(--diaper)" />{peeCount} <PooIcon size={10} color="var(--diaper)" />{pooCount}
+                                        </div>
+                                    </div>
+                                    <div style={{ background: 'rgba(149, 117, 205, 0.1)', padding: '12px 8px', borderRadius: '16px', textAlign: 'center' }}>
+                                        <p style={{ fontSize: '10px', color: 'var(--sleep)', fontWeight: 'bold' }}>睡眠</p>
+                                        <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{sleepHrs}<span style={{ fontSize: '10px' }}>h</span>{sleepMins}<span style={{ fontSize: '10px' }}>m</span></div>
+                                        <div style={{ fontSize: '9px', color: '#7f8c8d', marginTop: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                            <BabyIcon size={10} color="var(--sleep)" />{sleepLogs.length}回
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <h2 style={{ padding: '0 20px 10px' }}>一日のリズム (1週間)</h2>
+                        <SleepGraph />
+
+                        <div className="timeline-container" style={{ marginTop: '20px' }}>
+                            <h2 style={{ padding: '0 20px 15px' }}>{isToday ? '今日のタイムライン' : `${displayDate.getMonth() + 1}/${displayDate.getDate()}のタイムライン`}</h2>
+                            {filtered.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '40px', color: '#7f8c8d', fontSize: '14px' }}>記録なし</div>
+                            ) : (
+                                filtered.map(log => (
+                                    <div key={log.id + (log.isSplitStart ? '-split' : '')} className="timeline-item glass-pane animate-up" onClick={() => openForm(log.type, log)}>
+                                        <div className="timeline-icon" style={{ backgroundColor: log.type === 'milk' ? 'rgba(129, 199, 132, 0.1)' : log.type === 'diaper' ? 'rgba(255, 183, 77, 0.1)' : 'rgba(149, 117, 205, 0.1)' }}>
+                                            {log.type === 'milk' ? (
+                                                <BottleIcon size={20} color="var(--milk)" />
+                                            ) : log.type === 'diaper' ? (
+                                                <DropIcon size={20} color="var(--diaper)" />
+                                            ) : (
+                                                <BabyIcon size={20} color="var(--sleep)" />
+                                            )}
+                                        </div>
+                                        <div className="timeline-content">
+                                            <div className="timeline-time">
+                                                {log.isSplitStart ? '00:00' : formatTime(log.displayStartTime)}
+                                                {log.isSplitEnd && ' 〜 24:00'}
+                                            </div>
+                                            <div className="timeline-title">
+                                                {log.type === 'milk' ? 'ミルク' : log.type === 'diaper' ? 'オムツ' : '睡眠'}
+                                                {(log.isSplitStart || log.isSplitEnd) && <span style={{ fontSize: '10px', opacity: 0.6, marginLeft: '5px' }}>(日またぎ)</span>}
+                                            </div>
+                                            {log.note && <div className="timeline-note">{log.note}</div>}
+                                        </div>
+                                        <div className="timeline-value">
+                                            {log.type === 'milk' ? `${log.value}ml` : log.type === 'diaper' ? (log.subValue === 'pee' ? 'おしっこ' : log.subValue === 'poo' ? 'うんち' : '両方') : (log.displayEndTime ? getDuration(log.displayStartTime, log.displayEndTime) : 'ねんね中')}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            const History = () => {
+                const [selectedDate, setSelectedDate] = useState(getLocalDateString());
+
+                return (
+                    <div className="history-view animate-up" style={{ padding: '0 20px 80px' }}>
+                        <div className="glass-pane" style={{ padding: '30px', textAlign: 'center', borderRadius: '30px' }}>
+                            <i data-lucide="calendar" style={{ width: '48px', height: '48px', color: 'var(--primary)', marginBottom: '20px', opacity: 0.8 }}></i>
+                            <h2 style={{ marginBottom: '10px' }}>過去の記録を呼び出す</h2>
+                            <p style={{ fontSize: '14px', color: '#7f8c8d', marginBottom: '30px' }}>見たい日付を選択してください</p>
+
+                            <div className="input-group" style={{ marginBottom: '30px' }}>
+                                <input
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', color: 'var(--primary)', background: 'white' }}
+                                />
+                            </div>
+
+                            <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => viewStatsForDate(selectedDate)}>
+                                表示する
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
+
+            const Settings = () => (
+                <div className="settings-view animate-up" style={{ padding: '0 20px 100px' }}>
+                    <div className="glass-pane" style={{ padding: '24px', borderRadius: '24px', marginBottom: '20px' }}>
+                        <h2 style={{ marginBottom: '15px' }}>夫婦共有設定</h2>
+                        <p style={{ fontSize: '13px', color: '#7f8c8d', marginBottom: '20px', lineHeight: '1.6' }}>
+                            Supabaseを利用して、リアルタイムでデータを共有します。
+                        </p>
+
+                        <div className="input-group">
+                            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                同期を有効にする
+                                <input type="checkbox" checked={isSyncEnabled} onChange={e => setIsSyncEnabled(e.target.checked)} style={{ width: '40px' }} />
+                            </label>
+                            <div className={`sync-status ${syncStatus === 'synced' ? 'on' : 'off'}`}>
+                                <i data-lucide={syncStatus === 'synced' ? 'cloud-check' : syncStatus === 'connecting' ? 'refresh-cw' : 'cloud-off'} style={{ width: '16px' }}></i>
+                                {syncStatus === 'synced' ? '同期中' :
+                                    syncStatus === 'connecting' ? '接続中...' :
+                                        syncStatus.startsWith('error') ? (syncStatus.replace('error: ', '') || 'エラーが発生しました') :
+                                            'オフライン'}
+                            </div>
+                        </div>
+
+                        <div className="input-group">
+                            <label>Sync ID (夫婦共通の合言葉)</label>
+                            <input type="text" value={syncId} onChange={e => setSyncId(e.target.value)} placeholder="例: tanaka-baby-2026" />
+                        </div>
+
+                        <div className="input-group">
+                            <label>Supabase URL</label>
+                            <input type="text" value={supabaseUrl} onChange={e => setSupabaseUrl(e.target.value)} placeholder="https://xxx.supabase.co" />
+                        </div>
+
+                        <div className="input-group">
+                            <label>Supabase Anon Key</label>
+                            <input type="password" value={supabaseKey} onChange={e => setSupabaseKey(e.target.value)} placeholder="eyJhbG..." />
+                        </div>
+
+                        <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(0,0,0,0.03)', borderRadius: '12px', fontSize: '12px', color: '#7f8c8d' }}>
+                            <p>※設定後、アプリを再起動（リロード）すると同期が開始されます。</p>
+                        </div>
+                    </div>
+
+                    <div className="glass-pane" style={{ padding: '24px', borderRadius: '24px' }}>
+                        <h2>アプリ情報</h2>
+                        <div style={{ marginTop: '15px', padding: '15px', borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+                            <p style={{ fontSize: '12px', opacity: 0.5 }}>Baby Log v1.7 - Hybrid Sync Mode</p>
+                        </div>
+                    </div>
+                </div>
+            );
+
+
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, [activeTab, logs, isModalOpen]);
+
+            return (
+                <div className="app-container" style={{ paddingBottom: '90px' }}>
+                    <header style={{ padding: '40px 20px 20px', textAlign: 'left' }}>
+                        <h1 style={{ fontSize: '32px', fontWeight: '800', letterSpacing: '-1px' }}>Baby Log</h1>
+                        <p style={{ fontSize: '14px', opacity: 0.6 }}>{new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}</p>
+                    </header>
+
+                    <main>
+                        {activeTab === 'home' && <Home />}
+                        {activeTab === 'stats' && <Stats />}
+                        {activeTab === 'history' && <History />}
+                        {activeTab === 'settings' && <Settings />}
+                    </main>
+
+                    {/* モーダル (Drawer) */}
+                    <div className={`modal-overlay ${isModalOpen ? 'open' : ''}`} onClick={() => setIsModalOpen(false)}>
+                        <div className="drawer" onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h3 style={{ margin: 0 }}>{editingLog ? '記録を編集' : '新しく記録'}</h3>
+                                <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '24px', opacity: 0.5 }}>&times;</button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="input-group">
+                                    <label>タイプ</label>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <button className={`type-chip ${formType === 'milk' ? 'active' : ''}`} onClick={() => setFormType('milk')}>ミルク</button>
+                                        <button className={`type-chip ${formType === 'diaper' ? 'active' : ''}`} onClick={() => setFormType('diaper')}>オムツ</button>
+                                        <button className={`type-chip ${formType === 'moon' ? 'active' : ''}`} onClick={() => setFormType('moon')}>睡眠</button>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                                    <div className="input-group" style={{ flex: 1 }}><label>日付</label><input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} /></div>
+                                    <div className="input-group" style={{ flex: 1 }}>
+                                        <label>時刻</label>
+                                        <select value={formTime} onChange={(e) => setFormTime(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #ddd', background: 'white', fontSize: '16px' }}>
+                                            {!timeOptions.includes(formTime) && <option value={formTime}>{formTime}</option>}
+                                            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {formType === 'moon' && (
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                                        <div className="input-group" style={{ flex: 1 }}>
+                                            <label>終了日 (起きた日)</label>
+                                            <input type="date" value={formEndDate} onChange={(e) => setFormEndDate(e.target.value)} />
+                                        </div>
+                                        <div className="input-group" style={{ flex: 1 }}>
+                                            <label>終了時刻</label>
+                                            <select value={formEndTime} onChange={(e) => setFormEndTime(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #ddd', background: 'white', fontSize: '16px' }}>
+                                                <option value="">(ねんね中...)</option>
+                                                {formEndTime && !timeOptions.includes(formEndTime) && <option value={formEndTime}>{formEndTime}</option>}
+                                                {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {formType === 'milk' && (
+                                    <div className="input-group">
+                                        <label>量 (ml)</label>
+                                        <input type="number" value={formValue} onChange={(e) => setFormValue(Number(e.target.value))} min="0" step="10" />
+                                        <div style={{ display: 'flex', overflowX: 'auto', gap: '8px', marginTop: '10px', paddingBottom: '10px' }}>
+                                            {[100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200].map(v => (
+                                                <button key={v} className="btn" style={{ padding: '8px 12px', minWidth: '60px', borderRadius: '8px', fontSize: '12px', border: '1px solid #eee', background: formValue == v ? 'var(--primary-light)' : 'white' }} onClick={() => setFormValue(v)}>{v}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {formType === 'diaper' && (
+                                    <div className="input-group">
+                                        <label>内容</label>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <button className={`type-chip ${formSubValue === 'pee' ? 'active' : ''}`} onClick={() => setFormSubValue('pee')}>おしっこ</button>
+                                            <button className={`type-chip ${formSubValue === 'poo' ? 'active' : ''}`} onClick={() => setFormSubValue('poo')}>うんち</button>
+                                            <button className={`type-chip ${formSubValue === 'both' ? 'active' : ''}`} onClick={() => setFormSubValue('both')}>両方</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="input-group">
+                                    <label>備考</label>
+                                    <textarea value={formNote} onChange={(e) => setFormNote(e.target.value)} placeholder="メモがあれば入力..." style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #eee', minHeight: '60px' }}></textarea>
+                                </div>
+                            </div>
+                            <div className="drawer-footer" style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
+                                <button className="btn btn-primary" onClick={handleSave}>{editingLog ? '保存する' : '記録する'}</button>
+                                {editingLog && (
+                                    <button className="btn btn-delete-mobile" onClick={() => deleteLog(editingLog.id)}>記録を削除する</button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <nav className="bottom-nav glass-pane">
+                        <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}><i data-lucide="home"></i><span>ホーム</span></div>
+                        <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}><i data-lucide="bar-chart-2"></i><span>統計</span></div>
+                        <div className={`nav-item ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}><i data-lucide="clock"></i><span>履歴</span></div>
+                        <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}><i data-lucide="settings"></i><span>設定</span></div>
+                    </nav>
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<BabyLogApp />);
+    </script>
+</body>
+
+</html>
